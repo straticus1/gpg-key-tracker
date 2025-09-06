@@ -1,0 +1,55 @@
+title: GPG Key Tracker
+description: Comprehensive Python application for managing PGP/GPG keys with metadata tracking, usage logging, and automated reporting
+url: "https://straticus1.github.io"
+baseurl: "/gpg-key-tracker"
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+theme: minima
+
+# SEO
+lang: en_US
+author:
+  name: Ryan J Coleman
+  email: coleman.ryan@gmail.com
+
+# GitHub
+repository: straticus1/gpg-key-tracker
+
+# Exclude files from processing
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/
+  - .bundle/
+  - .sass-cache/
+  - .jekyll-cache/
+  - gemfiles/
+
+# Plugins
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-seo-tag
+
+# Collection settings
+collections_dir: docs
+
+# Navigation
+header_pages:
+  - installation.md
+  - usage.md
+  - reporting.md
+  - contributing.md
+
+# Footer links
+footer_links:
+  - title: GitHub
+    url: https://github.com/straticus1/gpg-key-tracker
+  - title: Issues
+    url: https://github.com/straticus1/gpg-key-tracker/issues
+  - title: Releases
+    url: https://github.com/straticus1/gpg-key-tracker/releases
