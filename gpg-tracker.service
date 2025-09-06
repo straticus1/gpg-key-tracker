@@ -1,0 +1,23 @@
+[Unit]
+Description=GPG Key Tracker Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/gpg-key-tracker
+Environment=PYTHONPATH=/opt/gpg-key-tracker
+ExecStart=/usr/bin/python3 /opt/gpg-key-tracker/gpg_tracker.py
+Restart=always
+RestartSec=10
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/gpg-key-tracker /home/.gnupg
+
+[Install]
+WantedBy=multi-user.target
