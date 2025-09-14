@@ -16,24 +16,45 @@ A comprehensive Python application for managing PGP/GPG keys with metadata track
 - **Key Status Control**: Activate/deactivate keys without deletion
 - **Key Replacement**: Replace keys while preserving metadata and history
 - **Metadata Tracking**: Track owner, requester, JIRA tickets, and notes
+- **Expiration Tracking**: Monitor key expiration dates and get alerts
+- **Usage Statistics**: Track key usage frequency and last usage
 
-### 📈 Usage Monitoring
+### 📈 Usage Monitoring & Analytics
 - **Operation Logging**: Track encrypt, decrypt, sign, and verify operations
 - **User Identification**: Log which users performed operations
 - **Audit Trail**: Complete operation history with timestamps
 - **Success/Failure Tracking**: Monitor operation outcomes
+- **Performance Metrics**: Response times and system performance
+- **Prometheus Integration**: Export metrics for monitoring systems
 
 ### 📊 Automated Reporting
 - **Multiple Formats**: CSV, JSON, and HTML reports
 - **Export Options**: Email, AWS S3, SCP, or local file generation
 - **Customizable Timeframes**: Reports for any date range
 - **Usage Statistics**: Success rates and operation breakdowns
+- **Expiration Reports**: Keys expiring soon or already expired
 
-### 🛠️ System Integration
+### 🛠️ System Integration & Operations
 - **Cross-Platform**: RedHat, CentOS, Fedora, Debian, Ubuntu support
 - **CLI Interface**: Rich terminal interface with tables and colors
-- **Database Storage**: SQLite with SQLAlchemy ORM
-- **Systemd Service**: Optional background service mode
+- **Interactive Mode**: User-friendly interactive CLI mode
+- **Command Aliases**: Short aliases for common commands (ls, add, rm, etc.)
+- **Database Storage**: Optimized SQLite with SQLAlchemy ORM
+- **Configuration Management**: Centralized configuration with validation
+
+### 🔒 Security & Reliability
+- **Input Validation**: Comprehensive input sanitization and validation
+- **Database Security**: SQL injection prevention and secure database operations
+- **Backup & Restore**: Full system backup with compression and encryption
+- **Health Monitoring**: System health checks and automated monitoring
+- **Audit Logging**: Comprehensive security and operations logging
+
+### 📦 Deployment & DevOps
+- **Docker Support**: Production-ready containerization
+- **Kubernetes Manifests**: Cloud-native deployment
+- **CI/CD Pipeline**: Automated testing and deployment
+- **Monitoring**: Prometheus metrics and Grafana dashboards
+- **Service Management**: Systemd integration for production
 
 ## 🚀 Quick Start
 
@@ -106,41 +127,114 @@ sudo apt-get install gnupg2
 python gpg_tracker.py init
 ```
 
-### Add a New Key
+### Interactive Mode
 ```bash
-python gpg_tracker.py add-key --key-file /path/to/key.asc --owner "John Doe" --requester "Jane Smith" --jira-ticket "PROJ-123"
+# Start user-friendly interactive mode
+python gpg_tracker.py interactive
 ```
 
-### List Keys
+### Key Management
+
+#### Add a New Key
+```bash
+python gpg_tracker.py add-key --key-file /path/to/key.asc --owner "John Doe" --requester "Jane Smith" --jira-ticket "PROJ-123"
+# Alias: python gpg_tracker.py add -k /path/to/key.asc -o "John Doe" -r "Jane Smith"
+```
+
+#### List Keys
 ```bash
 python gpg_tracker.py list-keys
 python gpg_tracker.py list-keys --all  # Include inactive keys
+# Aliases: python gpg_tracker.py ls (active only) or python gpg_tracker.py ll (all keys)
 ```
 
-### Edit Key Metadata
+#### Edit Key Metadata
 ```bash
 python gpg_tracker.py edit-key --fingerprint ABC123 --owner "New Owner"
 ```
 
-### Activate/Deactivate Keys
+#### Activate/Deactivate Keys
 ```bash
 python gpg_tracker.py activate-key --fingerprint ABC123
 python gpg_tracker.py deactivate-key --fingerprint ABC123
 ```
 
-### Replace a Key
+#### Replace a Key
 ```bash
 python gpg_tracker.py replace-key --old-fingerprint ABC123 --new-key-file new_key.asc
 ```
 
-### Delete a Key
+#### Delete a Key
 ```bash
 python gpg_tracker.py delete-key --fingerprint ABC123
+# Alias: python gpg_tracker.py rm --fingerprint ABC123
 ```
 
-### View Usage Logs
+### Key Expiration Management
+
+#### Check Expiring Keys
+```bash
+python gpg_tracker.py expiring-keys --days 30
+# Alias: python gpg_tracker.py expiring -d 30
+```
+
+#### Check Expired Keys
+```bash
+python gpg_tracker.py expired-keys
+# Alias: python gpg_tracker.py expired
+```
+
+#### Update Expiration Status
+```bash
+python gpg_tracker.py update-expiry
+```
+
+### Usage Monitoring
+
+#### View Usage Logs
 ```bash
 python gpg_tracker.py logs
+python gpg_tracker.py logs --fingerprint ABC123 --limit 100
+# Alias: python gpg_tracker.py log -f ABC123 -l 100
+```
+
+### System Health & Monitoring
+
+#### Health Check
+```bash
+python gpg_tracker.py health-check
+# Alias: python gpg_tracker.py status
+```
+
+#### View Metrics
+```bash
+python gpg_tracker.py metrics
+python gpg_tracker.py export-metrics --format json
+# Alias: python gpg_tracker.py stats
+```
+
+### Backup & Restore
+
+#### Create Backup
+```bash
+python gpg_tracker.py create-backup
+python gpg_tracker.py create-backup --name "pre-migration-backup"
+```
+
+#### List Backups
+```bash
+python gpg_tracker.py list-backups
+```
+
+#### Restore from Backup
+```bash
+python gpg_tracker.py restore-backup --backup-name backup_20240915_120000
+python gpg_tracker.py restore-backup --backup-name my-backup --components database,gpg_keyring
+```
+
+#### Delete Backup
+```bash
+python gpg_tracker.py delete-backup --backup-name old-backup
 ```
 
 ### Generate Reports

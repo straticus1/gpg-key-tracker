@@ -15,6 +15,10 @@ from gpg_manager import GPGManager
 from models import create_database
 from dotenv import load_dotenv
 from report_generator import ReportGenerator, ReportExporter
+from backup_manager import BackupManager
+from config import get_config
+from monitoring import get_metrics_collector, get_health_checker
+from interactive import start_interactive_mode
 
 load_dotenv()
 
@@ -703,6 +707,348 @@ def auto_report(days, fingerprint, report_format, recipients, s3_bucket, scp_hos
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)
+
+@cli.command()
+@click.option('--name', '-n', help='Backup name (optional, auto-generated if not provided)')
+def create_backup(name):
+    """Create a full backup of GPG keys and database"""
+    try:
+        backup_manager = BackupManager()
+        console.print("Creating backup...")
+
+        backup_info = backup_manager.create_full_backup(name)
+
+        console.print(Panel.fit(
+            f"[green]✓[/green] Backup created successfully!\n"
+            f"Name: {backup_info['backup_name']}\n"
+            f"Components: {', '.join(backup_info['components'].keys())}\n"
+            f"Timestamp: {backup_info['timestamp']}",
+            title="Backup Created"
+        ))
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+@cli.command()
+def list_backups():
+    """List available backups"""
+    try:
+        backup_manager = BackupManager()
+        backups = backup_manager.list_backups()
+
+        if not backups:
+            console.print(Panel.fit(
+                "No backups found",
+                title="No Backups"
+            ))
+            return
+
+        # Create table
+        table = Table(title="Available Backups")
+        table.add_column("Name", style="cyan", no_wrap=True)
+        table.add_column("Type", style="blue")
+        table.add_column("Size", style="green")
+        table.add_column("Created", style="yellow")
+        table.add_column("Components", style="magenta")
+
+        for backup in backups:
+            size_mb = backup.get('size', 0) / (1024 * 1024)
+            components = list(backup.get('components', {}).keys())
+
+            table.add_row(
+                backup['name'],
+                backup.get('type', 'unknown'),
+                f"{size_mb:.2f} MB",
+                backup.get('created', 'unknown').strftime('%Y-%m-%d %H:%M:%S'),
+                ', '.join(components) if components else 'N/A'
+            )
+
+        console.print(table)
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+@cli.command()
+@click.option('--backup-name', '-b', required=True, help='Name of backup to restore')
+@click.option('--components', '-c', help='Comma-separated list of components to restore (database,gpg_keyring)')
+@click.confirmation_option(prompt='Are you sure you want to restore? This will overwrite current data.')
+def restore_backup(backup_name, components):
+    """Restore from a backup"""
+    try:
+        backup_manager = BackupManager()
+
+        component_list = None
+        if components:
+            component_list = [c.strip() for c in components.split(',')]
+
+        console.print(f"Restoring from backup: {backup_name}...")
+
+        restore_result = backup_manager.restore_from_backup(backup_name, component_list)
+
+        console.print(Panel.fit(
+            f"[green]✓[/green] Restore completed!\n"
+            f"Backup: {restore_result['backup_name']}\n"
+            f"Components restored: {', '.join(restore_result['components'].keys())}\n"
+            f"Timestamp: {restore_result['restore_timestamp']}",
+            title="Restore Completed"
+        ))
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+@cli.command()
+@click.option('--backup-name', '-b', required=True, help='Name of backup to delete')
+@click.confirmation_option(prompt='Are you sure you want to delete this backup?')
+def delete_backup(backup_name):
+    """Delete a backup"""
+    try:
+        backup_manager = BackupManager()
+
+        if backup_manager.delete_backup(backup_name):
+            console.print(Panel.fit(
+                f"[green]✓[/green] Backup deleted successfully!\n"
+                f"Name: {backup_name}",
+                title="Backup Deleted"
+            ))
+        else:
+            console.print(Panel.fit(
+                f"[red]✗[/red] Failed to delete backup: {backup_name}",
+                title="Error"
+            ))
+            sys.exit(1)
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+@cli.command()
+@click.option('--days', '-d', default=30, help='Number of days ahead to check for expiring keys')
+def expiring_keys(days):
+    """Show keys that will expire within the specified number of days"""
+    gpg_manager = GPGManager()
+
+    try:
+        expiring = gpg_manager.get_expiring_keys(days)
+
+        if not expiring:
+            console.print(Panel.fit(
+                f"No keys expiring within {days} days",
+                title="No Expiring Keys"
+            ))
+            return
+
+        # Create table
+        table = Table(title=f"Keys Expiring Within {days} Days")
+        table.add_column("Fingerprint", style="cyan", no_wrap=True)
+        table.add_column("Owner", style="green")
+        table.add_column("Email", style="yellow")
+        table.add_column("Expires", style="red")
+        table.add_column("Days Left", style="bold red")
+        table.add_column("Usage Count", style="blue")
+
+        for key in expiring:
+            days_left = key['days_until_expiry']
+            style = "bold red" if days_left <= 7 else "yellow" if days_left <= 30 else "green"
+
+            table.add_row(
+                key['fingerprint'][:16] + "...",
+                key['owner'],
+                key['email'] or 'N/A',
+                key['expires_at'].strftime('%Y-%m-%d'),
+                f"[{style}]{days_left}[/{style}]",
+                str(key['usage_count'] or 0)
+            )
+
+        console.print(table)
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+@cli.command()
+def expired_keys():
+    """Show keys that have already expired"""
+    gpg_manager = GPGManager()
+
+    try:
+        expired = gpg_manager.get_expired_keys()
+
+        if not expired:
+            console.print(Panel.fit(
+                "No expired keys found",
+                title="No Expired Keys"
+            ))
+            return
+
+        # Create table
+        table = Table(title="Expired Keys")
+        table.add_column("Fingerprint", style="cyan", no_wrap=True)
+        table.add_column("Owner", style="green")
+        table.add_column("Email", style="yellow")
+        table.add_column("Expired", style="red")
+        table.add_column("Days Ago", style="bold red")
+        table.add_column("Usage Count", style="blue")
+
+        for key in expired:
+            table.add_row(
+                key['fingerprint'][:16] + "...",
+                key['owner'],
+                key['email'] or 'N/A',
+                key['expires_at'].strftime('%Y-%m-%d'),
+                str(key['days_since_expiry']),
+                str(key['usage_count'] or 0)
+            )
+
+        console.print(table)
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+@cli.command()
+def update_expiry():
+    """Update expiry status for all keys"""
+    gpg_manager = GPGManager()
+
+    try:
+        console.print("Refreshing key expiry dates from GPG...")
+        refreshed = gpg_manager.refresh_key_expiry_dates()
+
+        console.print("Updating key expiry status...")
+        updated = gpg_manager.update_key_expiry_status()
+
+        console.print(Panel.fit(
+            f"[green]✓[/green] Expiry update completed!\n"
+            f"Keys refreshed: {refreshed}\n"
+            f"Keys updated: {updated}",
+            title="Expiry Update Complete"
+        ))
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+@cli.command()
+def health_check():
+    """Check system health"""
+    try:
+        health_checker = get_health_checker()
+        health_status = health_checker.get_overall_health()
+
+        # Display overall status
+        status_color = "green" if health_status['status'] == 'healthy' else "yellow" if health_status['status'] == 'degraded' else "red"
+        console.print(Panel.fit(
+            f"[{status_color}]{health_status['status'].upper()}[/{status_color}]\n"
+            f"Timestamp: {health_status['timestamp']}\n"
+            f"Healthy: {health_status['summary']['healthy']}\n"
+            f"Degraded: {health_status['summary']['degraded']}\n"
+            f"Unhealthy: {health_status['summary']['unhealthy']}",
+            title="System Health"
+        ))
+
+        # Display individual checks
+        table = Table(title="Health Check Details")
+        table.add_column("Service", style="cyan")
+        table.add_column("Status", style="bold")
+        table.add_column("Response Time", style="blue")
+        table.add_column("Details", style="dim")
+
+        for service, check in health_status['checks'].items():
+            status_style = "green" if check['status'] == 'healthy' else "yellow" if check['status'] == 'degraded' else "red"
+            response_time = f"{check.get('response_time_ms', 0):.2f}ms"
+
+            # Format details
+            details = check.get('details', {})
+            detail_str = ', '.join([f"{k}: {v}" for k, v in details.items() if k != 'error'])
+            if 'error' in details:
+                detail_str = f"Error: {details['error']}"
+
+            table.add_row(
+                service.title(),
+                f"[{status_style}]{check['status'].upper()}[/{status_style}]",
+                response_time,
+                detail_str[:50] + "..." if len(detail_str) > 50 else detail_str
+            )
+
+        console.print(table)
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+@cli.command()
+def metrics():
+    """Show system metrics"""
+    try:
+        metrics_collector = get_metrics_collector()
+        current_metrics = metrics_collector.get_current_metrics()
+        uptime = metrics_collector.get_system_uptime()
+
+        # Display key metrics
+        console.print(Panel.fit(
+            f"[bright_blue]Keys:[/bright_blue] {current_metrics.total_keys} total, {current_metrics.active_keys} active, {current_metrics.expired_keys} expired\n"
+            f"[bright_green]Operations:[/bright_green] {current_metrics.total_operations} total, {current_metrics.success_rate:.2f}% success rate\n"
+            f"[bright_yellow]Performance:[/bright_yellow] {current_metrics.avg_response_time_ms:.2f}ms avg response time\n"
+            f"[bright_magenta]Uptime:[/bright_magenta] {uptime/3600:.2f} hours\n"
+            f"[bright_cyan]Database:[/bright_cyan] {current_metrics.database_size_mb:.2f}MB" if current_metrics.database_size_mb else "",
+            title="System Metrics"
+        ))
+
+        # Operations by type (last 24 hours)
+        if current_metrics.operations_by_type:
+            table = Table(title="Operations by Type (Last 24 Hours)")
+            table.add_column("Operation", style="cyan")
+            table.add_column("Count", style="green", justify="right")
+
+            for operation, count in sorted(current_metrics.operations_by_type.items(), key=lambda x: x[1], reverse=True):
+                table.add_row(operation.capitalize(), str(count))
+
+            console.print(table)
+
+        # Top users (last 24 hours)
+        if current_metrics.operations_by_user:
+            table = Table(title="Top Users (Last 24 Hours)")
+            table.add_column("User", style="cyan")
+            table.add_column("Operations", style="green", justify="right")
+
+            # Show top 10 users
+            top_users = sorted(current_metrics.operations_by_user.items(), key=lambda x: x[1], reverse=True)[:10]
+            for user, count in top_users:
+                table.add_row(user, str(count))
+
+            console.print(table)
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+@cli.command()
+@click.option('--format', 'output_format', type=click.Choice(['json', 'table']), default='table', help='Output format')
+def export_metrics(output_format):
+    """Export system metrics"""
+    try:
+        metrics_collector = get_metrics_collector()
+
+        if output_format == 'json':
+            metrics_json = metrics_collector.export_metrics_json()
+            console.print(metrics_json)
+        else:
+            # Use the regular metrics command for table format
+            from click import Context
+            ctx = Context(metrics)
+            ctx.invoke(metrics)
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+@cli.command()
+def interactive():
+    """Start interactive mode"""
+    start_interactive_mode()
 
 if __name__ == '__main__':
     cli()
