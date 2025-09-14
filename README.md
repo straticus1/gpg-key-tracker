@@ -1,4 +1,86 @@
-# GPG Key Tracker & Server
+# GPG Key Tracker
+
+A comprehensive GPG key management system with both CLI and server components for tracking, monitoring, and managing GPG keys across your infrastructure.
+
+## 🚀 Features
+
+### Client Features
+- Track and monitor GPG keys
+- Automated key backup
+- Key expiration alerts
+- Usage reporting
+- Interactive key management
+
+### Server Features
+- RESTful API for key management
+- Centralized key tracking
+- Multi-user support
+- API key authentication
+- Docker deployment support
+
+## 🏗 Project Structure
+
+```
+./
+├── config/               # Configuration files
+│   ├── .env.server.example
+│   └── config.env.example
+├── docker/               # Docker configuration
+│   ├── Dockerfile.server
+│   └── docker-compose.server.yml
+├── docs/                 # Documentation
+│   ├── CHANGELOG.md
+│   ├── INSTALL.md
+│   └── server/
+├── examples/             # Usage examples
+├── lib/                  # Core library code
+├── scripts/              # Installation scripts
+├── server/               # Server components
+│   ├── gpg_server.py
+│   └── server_cli.py
+└── tests/                # Test suite
+```
+
+## 🛠 Installation
+
+### Client Installation
+```bash
+# Install client components
+pip install -r requirements.txt
+
+# Configure settings
+cp config/config.env.example config/config.env
+```
+
+### Server Installation
+```bash
+# Using Docker
+docker-compose -f docker/docker-compose.server.yml up -d
+
+# Manual installation
+pip install -r docker/requirements_server.txt
+cp config/.env.server.example config/.env.server
+./server/start_server.py
+```
+
+## 📚 Documentation
+
+- [Installation Guide](docs/INSTALL.md)
+- [Server Setup](docs/server/SETUP_SERVER.md)
+- [API Documentation](docs/server/API_SEARCH_GUIDE.md)
+- [Feature Summary](docs/FEATURE_SUMMARY.md)
+- [Security Policy](docs/SECURITY.md)
+
+## 🔒 Security
+
+- End-to-end GPG key encryption
+- API key authentication
+- Secure key backup system
+- Role-based access control
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)

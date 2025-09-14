@@ -1,5 +1,41 @@
 # Changelog
 
+## [2.0.0] - 2025-09-14
+
+### Added
+- Server-side GPG key management system
+  - RESTful API for key management
+  - Authentication middleware
+  - Master key management
+  - API key system
+  - Server CLI interface
+
+- Docker support
+  - Server Dockerfile
+  - docker-compose configuration
+  - Container-specific requirements
+
+- Documentation
+  - Server setup and configuration guides
+  - API search and usage documentation
+  - Directory structure documentation
+  - Feature summary
+
+### Changed
+- Project structure reorganization
+  - Move all docs to docs/ directory
+  - Consolidate library code in lib/
+  - Move tests to tests/ directory
+  - Relocate scripts and service files
+  - Centralize configuration files
+
+### Security
+- Added server authentication system
+- Implemented API key management
+- Enhanced GPG key security measures
+
+# Changelog
+
 All notable changes to the GPG Key Tracker project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
