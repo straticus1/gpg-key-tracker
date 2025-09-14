@@ -99,6 +99,43 @@ class MonitoringConfig:
 
 
 @dataclass
+class ServerConfig:
+    """GPG Server configuration settings"""
+    enabled: bool = field(default_factory=lambda: os.getenv('GPG_SERVER_ENABLED', 'false').lower() == 'true')
+    host: str = field(default_factory=lambda: os.getenv('GPG_SERVER_HOST', '0.0.0.0'))
+    port: int = field(default_factory=lambda: int(os.getenv('GPG_SERVER_PORT', '8443')))
+    ssl_cert_file: Optional[str] = field(default_factory=lambda: os.getenv('GPG_SERVER_SSL_CERT'))
+    ssl_key_file: Optional[str] = field(default_factory=lambda: os.getenv('GPG_SERVER_SSL_KEY'))
+    require_ssl: bool = field(default_factory=lambda: os.getenv('GPG_SERVER_REQUIRE_SSL', 'true').lower() == 'true')
+    admin_api_key: Optional[str] = field(default_factory=lambda: os.getenv('GPG_SERVER_ADMIN_API_KEY'))
+    cors_origins: List[str] = field(default_factory=lambda: os.getenv('GPG_SERVER_CORS_ORIGINS', '').split(',') if os.getenv('GPG_SERVER_CORS_ORIGINS') else [])
+    max_request_size: int = field(default_factory=lambda: int(os.getenv('GPG_SERVER_MAX_REQUEST_SIZE', '1048576')))  # 1MB
+    request_timeout: int = field(default_factory=lambda: int(os.getenv('GPG_SERVER_REQUEST_TIMEOUT', '30')))
+    workers: int = field(default_factory=lambda: int(os.getenv('GPG_SERVER_WORKERS', '1')))
+
+
+@dataclass
+class APIKeyConfig:
+    """API Key configuration settings"""
+    default_rate_limit: int = field(default_factory=lambda: int(os.getenv('API_KEY_DEFAULT_RATE_LIMIT', '100')))
+    max_rate_limit: int = field(default_factory=lambda: int(os.getenv('API_KEY_MAX_RATE_LIMIT', '10000')))
+    default_expires_days: Optional[int] = field(default_factory=lambda: int(os.getenv('API_KEY_DEFAULT_EXPIRES_DAYS')) if os.getenv('API_KEY_DEFAULT_EXPIRES_DAYS') else None)
+    cleanup_interval_hours: int = field(default_factory=lambda: int(os.getenv('API_KEY_CLEANUP_INTERVAL_HOURS', '24')))
+    key_length: int = field(default_factory=lambda: int(os.getenv('API_KEY_LENGTH', '32')))  # bytes for token_hex
+
+
+@dataclass
+class MasterKeyConfig:
+    """Master Key configuration settings"""
+    default_key_size: int = field(default_factory=lambda: int(os.getenv('MASTER_KEY_SIZE', '4096')))
+    default_algorithm: str = field(default_factory=lambda: os.getenv('MASTER_KEY_ALGORITHM', 'RSA'))
+    require_master_signature: bool = field(default_factory=lambda: os.getenv('REQUIRE_MASTER_SIGNATURE', 'true').lower() == 'true')
+    signature_cache_hours: int = field(default_factory=lambda: int(os.getenv('SIGNATURE_CACHE_HOURS', '24')))
+    backup_enabled: bool = field(default_factory=lambda: os.getenv('MASTER_KEY_BACKUP_ENABLED', 'true').lower() == 'true')
+    backup_path: str = field(default_factory=lambda: os.getenv('MASTER_KEY_BACKUP_PATH', './master_key_backups'))
+
+
+@dataclass
 class Config:
     """Main configuration class that aggregates all settings"""
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
@@ -109,6 +146,9 @@ class Config:
     aws: AWSConfig = field(default_factory=AWSConfig)
     backup: BackupConfig = field(default_factory=BackupConfig)
     monitoring: MonitoringConfig = field(default_factory=MonitoringConfig)
+    server: ServerConfig = field(default_factory=ServerConfig)
+    api_keys: APIKeyConfig = field(default_factory=APIKeyConfig)
+    master_keys: MasterKeyConfig = field(default_factory=MasterKeyConfig)
 
     def __post_init__(self):
         """Validate configuration after initialization"""
@@ -146,6 +186,28 @@ class Config:
         if self.logging.level.upper() not in valid_levels:
             raise ValueError(f"Invalid log level: {self.logging.level}. Must be one of {valid_levels}")
 
+        # Validate server configuration
+        if self.server.enabled:
+            if self.server.require_ssl and not (self.server.ssl_cert_file and self.server.ssl_key_file):
+                raise ValueError("SSL certificate and key files are required when SSL is enabled")
+
+            if self.server.ssl_cert_file and not os.path.exists(self.server.ssl_cert_file):
+                logger.warning(f"SSL certificate file not found: {self.server.ssl_cert_file}")
+
+            if self.server.ssl_key_file and not os.path.exists(self.server.ssl_key_file):
+                logger.warning(f"SSL key file not found: {self.server.ssl_key_file}")
+
+            if not self.server.admin_api_key:
+                logger.warning("No admin API key configured. Admin endpoints will be unavailable.")
+
+        # Validate master key configuration
+        if self.master_keys.backup_enabled:
+            if not os.path.exists(self.master_keys.backup_path):
+                try:
+                    os.makedirs(self.master_keys.backup_path, exist_ok=True)
+                except OSError as e:
+                    raise ValueError(f"Cannot create master key backup directory {self.master_keys.backup_path}: {e}")
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary"""
         def _dataclass_to_dict(obj):
@@ -166,6 +228,8 @@ class Config:
             config_dict['email']['smtp_password'] = '***REDACTED***'
         if 'secret_access_key' in config_dict.get('aws', {}):
             config_dict['aws']['secret_access_key'] = '***REDACTED***'
+        if 'admin_api_key' in config_dict.get('server', {}):
+            config_dict['server']['admin_api_key'] = '***REDACTED***'
 
         with open(file_path, 'w') as f:
             json.dump(config_dict, f, indent=2, default=str)
@@ -190,6 +254,9 @@ class Config:
             aws_config = AWSConfig(**config_data.get('aws', {}))
             backup_config = BackupConfig(**config_data.get('backup', {}))
             monitoring_config = MonitoringConfig(**config_data.get('monitoring', {}))
+            server_config = ServerConfig(**config_data.get('server', {}))
+            api_keys_config = APIKeyConfig(**config_data.get('api_keys', {}))
+            master_keys_config = MasterKeyConfig(**config_data.get('master_keys', {}))
 
             return cls(
                 database=database_config,
@@ -199,7 +266,10 @@ class Config:
                 email=email_config,
                 aws=aws_config,
                 backup=backup_config,
-                monitoring=monitoring_config
+                monitoring=monitoring_config,
+                server=server_config,
+                api_keys=api_keys_config,
+                master_keys=master_keys_config
             )
         except Exception as e:
             logger.error(f"Failed to load configuration from {file_path}: {e}")

@@ -1,53 +1,44 @@
-# GPG Key Tracker
+# GPG Key Tracker & Server
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![Linux](https://img.shields.io/badge/Platform-Linux-green.svg)](https://www.linux.org/)
-[![GPG](https://img.shields.io/badge/GPG-2.0+-red.svg)](https://gnupg.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 
-A comprehensive Python application for managing PGP/GPG keys with metadata tracking, usage logging, and automated reporting.
+A comprehensive GPG key management system with both standalone tracking capabilities and a secure HTTP API server for enterprise key management.
 
-📖 **[Full Documentation](https://straticus1.github.io/gpg-key-tracker/)** | 🚀 **[Quick Start](#quick-start)** | 📋 **[Installation Guide](INSTALL.md)**
+📖 **[Server Documentation](docs/server/SERVER_README.md)** | 🚀 **[Quick Start](#quick-start)** | 📋 **[Setup Guide](docs/server/SETUP_SERVER.md)** | 🔍 **[Search API Guide](docs/server/API_SEARCH_GUIDE.md)**
 
 ## 🎆 Features
 
-### 🔑 Core Key Management
-- **Add/Remove Keys**: Import and delete GPG keys with full metadata tracking
-- **Key Status Control**: Activate/deactivate keys without deletion
-- **Key Replacement**: Replace keys while preserving metadata and history
-- **Metadata Tracking**: Track owner, requester, JIRA tickets, and notes
-- **Expiration Tracking**: Monitor key expiration dates and get alerts
-- **Usage Statistics**: Track key usage frequency and last usage
+### 🔧 Standalone GPG Tracker
+- **GPG Key Management**: Import, list, search, and manage GPG keys with metadata tracking
+- **Usage Monitoring**: Track encrypt, decrypt, sign, and verify operations with full audit trails
+- **Expiration Tracking**: Monitor key expiration dates with automated alerts
+- **Backup & Restore**: Automated backup system with configurable retention policies
+- **Interactive Mode**: User-friendly interactive CLI interface with rich terminal output
+- **Report Generation**: Detailed usage reports in CSV, JSON, and HTML formats
+- **Prometheus Integration**: Export metrics for operational monitoring systems
 
-### 📈 Usage Monitoring & Analytics
-- **Operation Logging**: Track encrypt, decrypt, sign, and verify operations
-- **User Identification**: Log which users performed operations
-- **Audit Trail**: Complete operation history with timestamps
-- **Success/Failure Tracking**: Monitor operation outcomes
-- **Performance Metrics**: Response times and system performance
-- **Prometheus Integration**: Export metrics for monitoring systems
+### 🌐 GPG Key Server (Enterprise)
+- **🔐 HTTP API Server**: FastAPI-based secure API with SSL/TLS support on ports 80/443
+- **🔑 API Key Authentication**: Mandatory authentication for all operations with rate limiting
+- **👑 Master Key Validation**: Organizational signing & encryption keys for key validation
+- **🔍 Enhanced Search**: Advanced search by fingerprint, email, key ID, name, or raw key upload
+- **⚡ GPG Operations**: Complete support for read, list, sign, encrypt, info, and search operations
+- **👨‍💼 Admin Interface**: Full API key and master key management with comprehensive CLI tools
+- **🐳 Docker Support**: Production-ready containerization with Docker Compose
+- **📊 Monitoring**: Health checks, usage statistics, and Prometheus metrics integration
+- **🏢 Organizational Keys**: Default organizational signing and encryption keys for validation
 
-### 📊 Automated Reporting
-- **Multiple Formats**: CSV, JSON, and HTML reports
-- **Export Options**: Email, AWS S3, SCP, or local file generation
-- **Customizable Timeframes**: Reports for any date range
-- **Usage Statistics**: Success rates and operation breakdowns
-- **Expiration Reports**: Keys expiring soon or already expired
-
-### 🛠️ System Integration & Operations
-- **Cross-Platform**: RedHat, CentOS, Fedora, Debian, Ubuntu support
-- **CLI Interface**: Rich terminal interface with tables and colors
-- **Interactive Mode**: User-friendly interactive CLI mode
-- **Command Aliases**: Short aliases for common commands (ls, add, rm, etc.)
-- **Database Storage**: Optimized SQLite with SQLAlchemy ORM
-- **Configuration Management**: Centralized configuration with validation
-
-### 🔒 Security & Reliability
-- **Input Validation**: Comprehensive input sanitization and validation
-- **Database Security**: SQL injection prevention and secure database operations
-- **Backup & Restore**: Full system backup with compression and encryption
-- **Health Monitoring**: System health checks and automated monitoring
-- **Audit Logging**: Comprehensive security and operations logging
+### 🔒 Security & Enterprise Features
+- **Input Validation**: Comprehensive sanitization and validation for all inputs
+- **Rate Limiting**: Configurable per-API-key rate limiting to prevent abuse
+- **Audit Logging**: Complete operation history and usage tracking for compliance
+- **Permission System**: Granular permissions for operations and key access
+- **SSL/TLS Support**: Full HTTPS support with certificate validation
+- **Master Signatures**: All keys must be signed by organizational master keys
+- **Secure Storage**: SHA-256 hashed API keys and encrypted sensitive data
 
 ### 📦 Deployment & DevOps
 - **Docker Support**: Production-ready containerization
@@ -77,7 +68,7 @@ python3 gpg_tracker.py list-keys
 python3 gpg_tracker.py generate-report --format html
 ```
 
-For detailed installation instructions, see **[INSTALL.md](INSTALL.md)**.
+For detailed installation instructions, see **[INSTALL.md](docs/INSTALL.md)**.
 
 ## 📚 Table of Contents
 
@@ -92,6 +83,65 @@ For detailed installation instructions, see **[INSTALL.md](INSTALL.md)**.
 9. [🤝 Contributing](#-contributing)
 10. [📜 License](#-license)
 
+## 📋 Quick Start
+
+### 🔧 Standalone Tracker
+
+```bash
+# Clone and install
+git clone https://github.com/your-org/gpg-key-tracker.git
+cd gpg-key-tracker
+pip install -r requirements.txt
+
+# Initialize database
+python gpg_tracker.py --init-db
+
+# Run interactive mode
+python gpg_tracker.py --interactive
+
+# Or manage keys directly
+python gpg_tracker.py --add-key /path/to/key.asc --owner "user@example.com" --requester "admin@example.com"
+python gpg_tracker.py --list-keys
+```
+
+### 🌐 GPG Key Server
+
+```bash
+# Install server dependencies
+pip install -r requirements.txt -r docker/requirements_server.txt
+
+# Configure server
+cp config/.env.server.example .env
+# Edit .env and set GPG_SERVER_ADMIN_API_KEY to a secure value
+
+# Initialize and start server
+python start_gpg_server.py --init-only
+python server_cli_wrapper.py master-key create-organizational \
+  --organization "Your Organization" \
+  --name "Production Keys" \
+  --email "admin@yourorg.com"
+python start_gpg_server.py
+
+# Create API keys and test
+python server_cli_wrapper.py api-key create --name "My App" --owner "app@example.com" --operations read list search
+curl -H "X-API-Key: YOUR_API_KEY" https://localhost:8443/keys
+```
+
+### 🐳 Docker Deployment (Server)
+
+```bash
+# Quick Docker setup
+cp config/.env.server.example .env
+# Edit .env with your settings
+docker-compose -f docker/docker-compose.server.yml up -d
+
+# Initialize organizational keys
+docker-compose exec gpg-server python server_cli.py master-key create-organizational \
+  --organization "Your Organization" \
+  --name "Production Keys" \
+  --email "admin@yourorg.com"
+```
+
 ## 📋 Installation
 
 ### Prerequisites
@@ -103,7 +153,11 @@ For detailed installation instructions, see **[INSTALL.md](INSTALL.md)**.
 ### Install Dependencies
 
 ```bash
+# Core dependencies
 pip install -r requirements.txt
+
+# Server dependencies (if using GPG Key Server)
+pip install -r docker/requirements_server.txt
 ```
 
 ### System Setup
@@ -317,8 +371,8 @@ python3 gpg_tracker.py generate-report --fingerprint ABC123 --format json
 
 ## 📝 Documentation
 
-- **[Installation Guide](INSTALL.md)**: Comprehensive installation instructions
-- **[Changelog](CHANGELOG.md)**: Version history and feature updates
+- **[Installation Guide](docs/INSTALL.md)**: Comprehensive installation instructions
+- **[Changelog](docs/CHANGELOG.md)**: Version history and feature updates
 - **[GitHub Pages](https://straticus1.github.io/gpg-key-tracker/)**: Full documentation website
 - **In-app Help**: Use `--help` with any command for detailed usage
 

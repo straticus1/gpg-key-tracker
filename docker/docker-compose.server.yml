@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  gpg-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: gpg-key-server
+    ports:
+      - "8443:8443"
+      - "8000:8000"  # Prometheus metrics
+    environment:
+      # Server configuration
+      - GPG_SERVER_ENABLED=true
+      - GPG_SERVER_HOST=0.0.0.0
+      - GPG_SERVER_PORT=8443
+      - GPG_SERVER_ADMIN_API_KEY=${GPG_SERVER_ADMIN_API_KEY:-change-me-admin-key}
+      - GPG_SERVER_REQUIRE_SSL=false  # Set to true in production with certificates
+
+      # Database configuration
+      - DATABASE_PATH=/app/data/gpg_server.db
+      - SQL_ECHO=false
+
+      # GPG configuration
+      - GPG_HOME=/app/gpg
+      - VALIDATE_KEYS=true
+      - REQUIRE_MASTER_SIGNATURE=true
+
+      # Security configuration
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_REQUESTS=100
+      - RATE_LIMIT_WINDOW=3600
+
+      # Logging configuration
+      - LOG_LEVEL=INFO
+      - LOG_FILE=/app/logs/server.log
+      - LOG_JSON=false
+
+      # Monitoring configuration
+      - MONITORING_ENABLED=true
+      - PROMETHEUS_PORT=8000
+
+      # API Key configuration
+      - API_KEY_DEFAULT_RATE_LIMIT=100
+      - API_KEY_CLEANUP_INTERVAL_HOURS=24
+
+      # Master Key configuration
+      - MASTER_KEY_BACKUP_ENABLED=true
+      - MASTER_KEY_BACKUP_PATH=/app/backups
+
+    volumes:
+      # Persistent data
+      - gpg_server_data:/app/data
+      - gpg_server_logs:/app/logs
+      - gpg_server_gpg:/app/gpg
+      - gpg_server_backups:/app/backups
+
+      # SSL certificates (uncomment for production)
+      # - ./ssl/cert.pem:/app/ssl/cert.pem:ro
+      # - ./ssl/key.pem:/app/ssl/key.pem:ro
+
+    restart: unless-stopped
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.5'
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8443/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Redis for distributed rate limiting and caching
+  redis:
+    image: redis:7-alpine
+    container_name: gpg-server-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+
+  # Optional: Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: gpg-server-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+    depends_on:
+      - gpg-server
+
+volumes:
+  gpg_server_data:
+    driver: local
+  gpg_server_logs:
+    driver: local
+  gpg_server_gpg:
+    driver: local
+  gpg_server_backups:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+
+networks:
+  default:
+    name: gpg-server-network

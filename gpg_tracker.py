@@ -11,14 +11,18 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 from datetime import datetime
-from gpg_manager import GPGManager
-from models import create_database
 from dotenv import load_dotenv
-from report_generator import ReportGenerator, ReportExporter
-from backup_manager import BackupManager
-from config import get_config
-from monitoring import get_metrics_collector, get_health_checker
-from interactive import start_interactive_mode
+
+# Add lib directory to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'lib'))
+
+from lib.gpg_manager import GPGManager
+from lib.models import create_database
+from lib.report_generator import ReportGenerator, ReportExporter
+from lib.backup_manager import BackupManager
+from lib.config import get_config
+from lib.monitoring import get_metrics_collector, get_health_checker
+from lib.interactive import start_interactive_mode
 
 load_dotenv()
 

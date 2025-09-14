@@ -1,6 +1,6 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, Index
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, Index, JSON, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, Session, relationship
 from sqlalchemy.pool import StaticPool
 from datetime import datetime
 from typing import Optional
@@ -76,6 +76,118 @@ class UsageLog(Base):
     
     def __repr__(self):
         return f"<UsageLog(fingerprint='{self.fingerprint}', operation='{self.operation}', user='{self.user}')>"
+
+
+class APIKey(Base):
+    """Model for API key management"""
+    __tablename__ = 'api_keys'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key_hash = Column(String(64), unique=True, nullable=False, index=True)  # SHA-256 hash of the API key
+    name = Column(String(255), nullable=False)  # Human-readable name for the key
+    owner = Column(String(255), nullable=False, index=True)  # Key owner
+    permissions = Column(JSON, nullable=False)  # Permissions JSON object
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, index=True)  # Optional expiration date
+    last_used_at = Column(DateTime, index=True)  # Last usage timestamp
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    rate_limit = Column(Integer, default=100, nullable=False)  # Requests per minute
+    notes = Column(Text)
+
+    # Relationships
+    usage_logs = relationship("APIKeyUsage", back_populates="api_key")
+
+    # Composite indexes
+    __table_args__ = (
+        Index('idx_owner_active', 'owner', 'is_active'),
+        Index('idx_expires_active', 'expires_at', 'is_active'),
+    )
+
+    def __repr__(self):
+        return f"<APIKey(name='{self.name}', owner='{self.owner}')>"
+
+
+class MasterKey(Base):
+    """Model for master key management"""
+    __tablename__ = 'master_keys'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    fingerprint = Column(String(64), unique=True, nullable=False, index=True)
+    key_type = Column(String(20), nullable=False, index=True)  # 'signing' or 'encryption'
+    key_role = Column(String(20), nullable=False, index=True)  # 'organizational' or 'master'
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    organization = Column(String(255))  # Organization name
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    is_default = Column(Boolean, default=False, nullable=False, index=True)  # Default org key
+    key_size = Column(Integer)  # Key size in bits
+    algorithm = Column(String(50))  # Key algorithm (RSA, EdDSA, etc.)
+    email = Column(String(255))  # Contact email for key
+    expires_at = Column(DateTime, index=True)  # Key expiration
+
+    # Composite indexes
+    __table_args__ = (
+        Index('idx_type_active', 'key_type', 'is_active'),
+        Index('idx_role_active', 'key_role', 'is_active'),
+        Index('idx_type_default', 'key_type', 'is_default'),
+        Index('idx_role_default', 'key_role', 'is_default'),
+    )
+
+    def __repr__(self):
+        return f"<MasterKey(name='{self.name}', type='{self.key_type}', role='{self.key_role}')>"
+
+
+class APIKeyUsage(Base):
+    """Model for API key usage logging"""
+    __tablename__ = 'api_key_usage'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    api_key_id = Column(Integer, ForeignKey('api_keys.id'), nullable=False, index=True)
+    endpoint = Column(String(255), nullable=False, index=True)
+    method = Column(String(10), nullable=False)  # HTTP method
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    ip_address = Column(String(45))  # IPv4 or IPv6
+    user_agent = Column(Text)
+    response_status = Column(Integer, nullable=False, index=True)
+    response_time_ms = Column(Integer)  # Response time in milliseconds
+    request_size = Column(Integer)  # Request size in bytes
+    response_size = Column(Integer)  # Response size in bytes
+
+    # Relationships
+    api_key = relationship("APIKey", back_populates="usage_logs")
+
+    # Composite indexes
+    __table_args__ = (
+        Index('idx_api_key_timestamp', 'api_key_id', 'timestamp'),
+        Index('idx_endpoint_status', 'endpoint', 'response_status'),
+        Index('idx_timestamp_status', 'timestamp', 'response_status'),
+    )
+
+    def __repr__(self):
+        return f"<APIKeyUsage(api_key_id={self.api_key_id}, endpoint='{self.endpoint}')>"
+
+
+class KeySignature(Base):
+    """Model for tracking key signatures by master keys"""
+    __tablename__ = 'key_signatures'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key_fingerprint = Column(String(64), ForeignKey('gpg_keys.fingerprint'), nullable=False, index=True)
+    master_key_fingerprint = Column(String(64), ForeignKey('master_keys.fingerprint'), nullable=False, index=True)
+    signature_data = Column(Text, nullable=False)  # The actual signature
+    signed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    is_valid = Column(Boolean, default=True, nullable=False, index=True)
+    verified_at = Column(DateTime)  # Last verification timestamp
+
+    # Composite indexes
+    __table_args__ = (
+        Index('idx_key_master', 'key_fingerprint', 'master_key_fingerprint'),
+        Index('idx_master_valid', 'master_key_fingerprint', 'is_valid'),
+    )
+
+    def __repr__(self):
+        return f"<KeySignature(key='{self.key_fingerprint[:16]}...', master='{self.master_key_fingerprint[:16]}...')>"
 
 # Database setup
 def get_database_url() -> str:
